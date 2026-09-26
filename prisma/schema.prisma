@@ -1,0 +1,152 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  SUSPENDED
+  TERMINATED
+}
+
+enum LocationEnum {
+  HEAD_OFFICE
+  DATE_FACTORY
+  AGRI_FARM
+  PASTE_FACTORY
+  SORTING_STATION
+}
+
+enum PaymentMethod {
+  VODAFONE_CASH
+  INSTAPAY
+  CIB_BANK
+  CASH
+}
+
+enum LoanStatus {
+  ACTIVE
+  PAID_OFF
+  FROZEN
+}
+
+model Setting {
+  id                    String   @id @default(uuid())
+  fiscalYear            Int      @default(2026)
+  standardMonthDays     Int      @default(30)
+  standardDailyWorkHours Int     @default(8)
+  overtimeFactor        Decimal  @default(1.0) @db.Decimal(5, 2)
+  updatedAt             DateTime @updatedAt
+}
+
+model Employee {
+  id               String          @id @default(uuid())
+  code             String          @unique // E001, E002, etc.
+  name             String
+  nationalId       String?         @db.VarChar(14)
+  position         String
+  location         LocationEnum    @default(DATE_FACTORY)
+  hireDate         DateTime
+  basicSalary      Decimal         @db.Decimal(12, 2)
+  workDaysInCycle  Int             @default(23)
+  leaveDaysInCycle Int             @default(7)
+  status           EmployeeStatus  @default(ACTIVE)
+  paymentMethod    PaymentMethod   @default(VODAFONE_CASH)
+  paymentAccount   String?
+  attendances      Attendance[]
+  loans            Loan[]
+  payrolls         PayrollRecord[]
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+}
+
+model Attendance {
+  id             String    @id @default(uuid())
+  monthYear      String    // e.g. "Jan 2026", "Feb 2026"
+  employeeId     String
+  employee       Employee  @relation(fields: [employeeId], references: [id])
+  actualWorkDays Decimal   @db.Decimal(5, 2)
+  leaveDaysTaken Decimal   @default(0) @db.Decimal(5, 2)
+  unpaidAbsence  Decimal   @default(0) @db.Decimal(5, 2)
+  overtimeHours  Decimal   @default(0) @db.Decimal(5, 2)
+  bonuses        Decimal   @default(0) @db.Decimal(10, 2)
+  penalties      Decimal   @default(0) @db.Decimal(10, 2)
+  notes          String?
+  createdAt      DateTime  @default(now())
+
+  @@unique([monthYear, employeeId])
+}
+
+model Loan {
+  id              String      @id @default(uuid())
+  code            String      @unique // L001, L002
+  employeeId      String
+  employee        Employee    @relation(fields: [employeeId], references: [id])
+  totalAmount     Decimal     @db.Decimal(10, 2)
+  monthlyInstallment Decimal  @db.Decimal(10, 2)
+  installmentsCount Int
+  startMonth      String      // e.g. "Feb 2026"
+  endMonth        String      // e.g. "Jul 2026"
+  deductedCount   Int         @default(0)
+  totalPaid       Decimal     @default(0) @db.Decimal(10, 2)
+  remainingAmount Decimal     @db.Decimal(10, 2)
+  status          LoanStatus  @default(ACTIVE)
+  createdAt       DateTime    @default(now())
+}
+
+model PayrollRecord {
+  id               String   @id @default(uuid())
+  monthYear        String   // "Jan 2026"
+  employeeId       String
+  employee         Employee @relation(fields: [employeeId], references: [id])
+  dailyRate        Decimal  @db.Decimal(10, 2)
+  absenceDeduction Decimal  @default(0) @db.Decimal(10, 2)
+  overtimePay      Decimal  @default(0) @db.Decimal(10, 2)
+  incentives       Decimal  @default(0) @db.Decimal(10, 2)
+  totalGross       Decimal  @db.Decimal(10, 2)
+  loanInstallment  Decimal  @default(0) @db.Decimal(10, 2)
+  directPenalties  Decimal  @default(0) @db.Decimal(10, 2)
+  totalDeductions  Decimal  @db.Decimal(10, 2)
+  netPayable       Decimal  @db.Decimal(10, 2)
+  isApproved       Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  @@unique([monthYear, employeeId])
+}
+
+model FactoryShiftRecord {
+  id               String   @id @default(uuid())
+  date             DateTime
+  genderCategory   String   // "MEN", "WOMEN"
+  shiftType        String   // "DAY", "NIGHT"
+  workersCount     Int
+  dailyWagePerUnit Decimal  @db.Decimal(10, 2)
+  overtimeHours    Decimal  @default(0) @db.Decimal(5, 2)
+  transportAllowance Decimal @default(0) @db.Decimal(10, 2)
+  totalAmount      Decimal  @db.Decimal(10, 2)
+  paidAmount       Decimal  @default(0) @db.Decimal(10, 2)
+  balance          Decimal  @db.Decimal(10, 2)
+  notes            String?
+  createdAt        DateTime @default(now())
+}
+
+model ContractorOperation {
+  id              String   @id @default(uuid())
+  contractorName  String   // e.g. "أبو عاصم فصل", "إسلام الأزلي"
+  operationType   String   // "فصل فسائل", "تكييس عراجين", "جمع وفرز"
+  quantity        Decimal  @db.Decimal(10, 2)
+  unitPrice       Decimal  @db.Decimal(10, 2)
+  totalAmount     Decimal  @db.Decimal(12, 2)
+  retentionRate   Decimal  @default(0.10) @db.Decimal(5, 2) // نسبة المحجوز 10%
+  retentionAmount Decimal  @db.Decimal(10, 2)
+  netPayable      Decimal  @db.Decimal(12, 2)
+  totalTransferred Decimal @default(0) @db.Decimal(12, 2)
+  remainingBalance Decimal @db.Decimal(12, 2)
+  date            DateTime
+  notes           String?
+  createdAt       DateTime @default(now())
+}
